@@ -24,16 +24,53 @@ export const getInvoices = async (req: Request, res: Response) => {
 
 export const createInvoice = async (req: Request, res: Response) => {
   try {
-    const { projectId, amount, dueDate, lineItems } = req.body;
+    const { projectId: inputProjectId, clientId, projectName, amount, dueDate, lineItems } = req.body;
     const userId = req.user?.id;
 
-    if (!projectId || amount === undefined || !dueDate) {
-      res.status(400).json({ error: 'Missing required fields' });
+    if (amount === undefined || !dueDate) {
+      res.status(400).json({ error: 'Amount and due date are required' });
       return;
     }
 
+    if (!inputProjectId && !clientId) {
+      res.status(400).json({ error: 'Either project or client must be selected' });
+      return;
+    }
+
+    let finalProjectId = inputProjectId;
+
+    // If client is specified directly, find or create a project for them
+    if (!finalProjectId && clientId) {
+      const client = await prisma.client.findFirst({
+        where: { id: clientId, userId }
+      });
+      if (!client) {
+        res.status(404).json({ error: 'Client not found' });
+        return;
+      }
+
+      // Check if client already has a project or create a new one
+      const existingProject = await prisma.project.findFirst({
+        where: { clientId }
+      });
+
+      if (existingProject && !projectName) {
+        finalProjectId = existingProject.id;
+      } else {
+        const newProject = await prisma.project.create({
+          data: {
+            clientId,
+            name: projectName || `${client.name} Project`,
+            status: 'In progress',
+          }
+        });
+        finalProjectId = newProject.id;
+      }
+    }
+
     const project = await prisma.project.findFirst({
-      where: { id: projectId, client: { userId } }
+      where: { id: finalProjectId, client: { userId } },
+      include: { client: true }
     });
     
     if (!project) {
@@ -41,17 +78,30 @@ export const createInvoice = async (req: Request, res: Response) => {
       return;
     }
 
+    const parsedAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+
     const invoice = await prisma.invoice.create({
       data: {
-        projectId,
-        amount,
+        projectId: finalProjectId,
+        amount: parsedAmount,
         dueDate: new Date(dueDate),
         status: 'Unpaid',
         lineItems: {
-          create: lineItems || [] // [{ description, quantity, price }]
+          create: lineItems || [
+            { description: 'Professional Services', quantity: 1, price: parsedAmount }
+          ]
         }
       },
-      include: { lineItems: true }
+      include: { lineItems: true, project: { include: { client: true } } }
+    });
+
+    // Log activity on the client
+    await prisma.activityLog.create({
+      data: {
+        clientId: project.clientId,
+        action: 'Invoice Created',
+        details: `Created invoice for $${parsedAmount.toFixed(2)}`
+      }
     });
 
     res.status(201).json(invoice);

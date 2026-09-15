@@ -20,11 +20,13 @@ const projects_routes_1 = __importDefault(require("./modules/projects/projects.r
 const invoices_routes_1 = __importDefault(require("./modules/invoices/invoices.routes"));
 const ai_routes_1 = __importDefault(require("./modules/ai/ai.routes"));
 const analytics_routes_1 = __importDefault(require("./modules/analytics/analytics.routes"));
+const notifications_routes_1 = __importDefault(require("./modules/notifications/notifications.routes"));
 app.use('/api/clients', clients_routes_1.default);
 app.use('/api/projects', projects_routes_1.default);
 app.use('/api/invoices', invoices_routes_1.default);
 app.use('/api/ai', ai_routes_1.default);
 app.use('/api/analytics', analytics_routes_1.default);
+app.use('/api/notifications', notifications_routes_1.default);
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'FreelanceFlow API is running' });
 });

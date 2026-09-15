@@ -57,6 +57,16 @@ const createClient = async (req, res) => {
             res.status(400).json({ error: 'Name is required' });
             return;
         }
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+        // Ensure user exists for foreign key constraint
+        await prisma_1.default.user.upsert({
+            where: { id: userId },
+            update: {},
+            create: { id: userId, email: req.user.email || 'unknown@example.com' }
+        });
         const client = await prisma_1.default.client.create({
             data: {
                 userId,

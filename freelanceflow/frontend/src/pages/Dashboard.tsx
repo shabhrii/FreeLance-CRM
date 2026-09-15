@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
-import { Plus, TrendingUp, AlertCircle } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Plus, TrendingUp, AlertCircle, FileText, Briefcase, Sparkles } from 'lucide-react'
 import ClientHealth from '@/components/ClientHealth'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
@@ -134,9 +135,14 @@ export default function Dashboard() {
               />
             </div>
             <Button type="submit" disabled={createClient.isPending} className="flex items-center gap-2">
-              <Plus size={16} /> Add Lead
+              <Plus size={16} /> {createClient.isPending ? 'Adding...' : 'Add Lead'}
             </Button>
           </form>
+          {createClient.isError && (
+            <p className="text-xs text-destructive mt-2">
+              {(createClient.error as any)?.message || 'Failed to add lead. Please check your connection.'}
+            </p>
+          )}
         </div>
 
         {isLoading ? (
@@ -178,6 +184,27 @@ export default function Dashboard() {
                       </div>
                       
                       <ClientHealth clientId={client.id} />
+
+                      <div className="mt-3 pt-2 border-t flex items-center justify-between text-xs text-muted-foreground">
+                        <Link 
+                          to={`/invoices?clientId=${client.id}`} 
+                          className="hover:text-primary flex items-center gap-1 font-medium text-primary"
+                        >
+                          <FileText size={12} /> Invoice
+                        </Link>
+                        <Link 
+                          to="/projects" 
+                          className="hover:text-foreground flex items-center gap-1"
+                        >
+                          <Briefcase size={12} /> Project
+                        </Link>
+                        <Link 
+                          to={`/proposals?clientId=${client.id}`} 
+                          className="hover:text-primary flex items-center gap-1 font-medium text-purple-600 dark:text-purple-400"
+                        >
+                          <Sparkles size={12} /> Proposal
+                        </Link>
+                      </div>
                     </div>
                   ))}
                 </div>

@@ -19,12 +19,14 @@ import projectsRouter from './modules/projects/projects.routes';
 import invoicesRouter from './modules/invoices/invoices.routes';
 import aiRouter from './modules/ai/ai.routes';
 import analyticsRouter from './modules/analytics/analytics.routes';
+import notificationsRouter from './modules/notifications/notifications.routes';
 
 app.use('/api/clients', clientsRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/invoices', invoicesRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/analytics', analyticsRouter);
+app.use('/api/notifications', notificationsRouter);
 
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', message: 'FreelanceFlow API is running' });

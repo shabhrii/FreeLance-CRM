@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
-import { Plus } from 'lucide-react'
+import { Plus, UserPlus, X } from 'lucide-react'
 
 export default function Projects() {
   const queryClient = useQueryClient()
@@ -10,6 +10,12 @@ export default function Projects() {
   const [clientId, setClientId] = useState('')
   const [name, setName] = useState('')
   const [status, setStatus] = useState('Not started')
+
+  // Quick Client creation state
+  const [showAddClient, setShowAddClient] = useState(false)
+  const [newClientName, setNewClientName] = useState('')
+  const [newClientEmail, setNewClientEmail] = useState('')
+  const [clientCreateError, setClientCreateError] = useState('')
 
   const { data: clients = [] } = useQuery({
     queryKey: ['clients'],
@@ -20,6 +26,30 @@ export default function Projects() {
     queryKey: ['projects'],
     queryFn: () => fetchApi('/projects')
   })
+
+  const createClientMutation = useMutation({
+    mutationFn: (newClient: { name: string; email?: string }) => fetchApi('/clients', {
+      method: 'POST',
+      body: JSON.stringify(newClient)
+    }),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
+      setClientId(created.id)
+      setNewClientName('')
+      setNewClientEmail('')
+      setShowAddClient(false)
+      setClientCreateError('')
+    },
+    onError: (err: any) => {
+      setClientCreateError(err.message || 'Failed to create client')
+    }
+  })
+
+  const handleQuickAddClient = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newClientName.trim()) return
+    createClientMutation.mutate({ name: newClientName.trim(), email: newClientEmail.trim() || undefined })
+  }
 
   const createProject = useMutation({
     mutationFn: (newProject: any) => fetchApi('/projects', {
@@ -60,14 +90,67 @@ export default function Projects() {
 
   return (
     <div>
-      <div className="mb-8 p-4 border rounded-lg bg-card shadow-sm">
-        <h2 className="text-lg font-semibold mb-4">Add New Project</h2>
+      <div className="mb-8 p-4 border rounded-lg bg-card shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Add New Project</h2>
+          <Button
+            type="button"
+            onClick={() => setShowAddClient(!showAddClient)}
+            className="text-xs flex items-center gap-1.5 h-8 bg-secondary text-secondary-foreground hover:bg-secondary/80"
+          >
+            {showAddClient ? <X size={14} /> : <UserPlus size={14} />}
+            {showAddClient ? 'Cancel New Client' : '+ New Client'}
+          </Button>
+        </div>
+
+        {/* Inline Quick Add Client Box */}
+        {showAddClient && (
+          <div className="p-3 border border-primary/20 bg-primary/5 rounded-md text-sm space-y-2 animate-in fade-in">
+            <p className="font-semibold text-primary text-xs">Quick Add Client</p>
+            {clientCreateError && (
+              <p className="text-xs text-destructive">{clientCreateError}</p>
+            )}
+            <div className="flex gap-2 flex-wrap items-end">
+              <div className="flex-1 min-w-[150px]">
+                <label className="text-xs text-muted-foreground block mb-1">Client Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Acme Corp"
+                  value={newClientName}
+                  onChange={e => setNewClientName(e.target.value)}
+                  className="flex h-8 w-full rounded-md border border-input bg-background px-2 text-xs shadow-sm"
+                  required
+                />
+              </div>
+              <div className="flex-1 min-w-[150px]">
+                <label className="text-xs text-muted-foreground block mb-1">Email (Optional)</label>
+                <input
+                  type="email"
+                  placeholder="contact@acme.com"
+                  value={newClientEmail}
+                  onChange={e => setNewClientEmail(e.target.value)}
+                  className="flex h-8 w-full rounded-md border border-input bg-background px-2 text-xs shadow-sm"
+                />
+              </div>
+              <Button
+                type="button"
+                onClick={handleQuickAddClient}
+                disabled={createClientMutation.isPending || !newClientName.trim()}
+                className="h-8 text-xs px-3"
+              >
+                {createClientMutation.isPending ? 'Saving...' : 'Save & Select Client'}
+              </Button>
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleCreate} className="flex gap-4 items-end flex-wrap">
           <div className="space-y-2 min-w-[200px]">
             <label className="text-sm font-medium">Project Name</label>
             <input 
               type="text" 
               className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              placeholder="e.g. Website Redesign"
               value={name}
               onChange={e => setName(e.target.value)}
               required
@@ -81,7 +164,9 @@ export default function Projects() {
               onChange={e => setClientId(e.target.value)}
               required
             >
-              <option value="">Select a client...</option>
+              <option value="">
+                {clients.length === 0 ? 'No clients yet (click + New Client)' : 'Select a client...'}
+              </option>
               {clients.map((c: any) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -99,7 +184,7 @@ export default function Projects() {
               <option value="Completed">Completed</option>
             </select>
           </div>
-          <Button type="submit" disabled={createProject.isPending} className="flex items-center gap-2">
+          <Button type="submit" disabled={createProject.isPending || !clientId} className="flex items-center gap-2">
             <Plus size={16} /> Add Project
           </Button>
         </form>
@@ -113,7 +198,7 @@ export default function Projects() {
             <div key={project.id} className="p-4 border rounded-lg bg-card shadow-sm flex items-center justify-between">
               <div>
                 <h3 className="font-semibold text-lg">{project.name}</h3>
-                <p className="text-sm text-muted-foreground">Client: {project.client.name}</p>
+                <p className="text-sm text-muted-foreground">Client: {project.client?.name || 'N/A'}</p>
               </div>
               <div className="flex items-center gap-4">
                 <select 

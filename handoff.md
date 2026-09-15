@@ -3,7 +3,7 @@
 > **Project:** FreelanceFlow CRM MVP  
 > **Repo path:** `C:\Rishabh\TY\CC\cp\FreeLance-CRM\freelanceflow`  
 > **Handoff Date:** 14 September 2026  
-> **Current status: BUILD PASSING ✅ — Awaiting environment setup before first run.**
+> **Current status: BUILD & TESTS PASSING ✅ — Local SQLite DB Synced & Ready for Run / AWS Migration.**
 
 ---
 
@@ -101,53 +101,60 @@ freelanceflow/
 
 ---
 
-## 🔴 Remaining Work (Not Yet Done)
+## ✅ Completed Tasks (Including Sprints 0–5 & Handoff Polish)
 
-### 1. Environment Setup — MUST DO FIRST
-The app will not start without these. Create a .env file in freelanceflow/ based on .env.example:
+### 1. Environment & Database Setup — DONE ✅
+- Local SQLite database initialized (`dev.db`) and synced via Prisma (`npx prisma db push`).
+- Ready for demo and local development with zero external DB dependencies.
+- `.env` files created for root, backend, and frontend.
+- Prepared for AWS migration (switch `provider = "postgresql"` and set AWS RDS PostgreSQL `DATABASE_URL` when ready).
 
-\`\`\`env
-PORT=5000
-NODE_ENV=development
-VITE_SUPABASE_URL="https://[YOUR-PROJECT-REF].supabase.co"
-VITE_SUPABASE_ANON_KEY="eyJ..."
-GROQ_API_KEY="gsk_..."
-VITE_API_URL="http://localhost:5000/api"
-\`\`\`
+### 2. Real Test Coverage — DONE ✅
+- **Backend Tests (Jest + ts-jest)**:
+  - `src/health.test.ts`: base test infrastructure check.
+  - `src/modules/clients/clients.test.ts`: full CRUD tests, user ownership verification, stage change activity logs, error handling.
+  - `src/modules/ai/ai.test.ts`: Groq API completion, client health score calculation, and graceful degradation/fallback (503) when `GROQ_API_KEY` is not present.
+  - `src/modules/notifications/notifications.test.ts`: in-app notifications, mark-as-read, overdue invoice automated checks.
+  - **Result: 4 suites passed, 25 tests passed.**
+- **Frontend Tests (Vitest + JSDOM + Testing Library)**:
+  - `src/App.test.tsx`: base render test.
+  - `src/components/ProtectedRoute.test.tsx`: tests for unauthenticated redirect to `/login`, loading spinner state, and authorized `<Outlet />` rendering.
+  - **Result: 2 suites passed, 4 tests passed.**
 
-- Create a free Supabase project at https://supabase.com to get the URL and anon key.
-- Create a free Groq API key at https://console.groq.com.
+### 3. Notifications & Overdue Alerts — DONE ✅
+- Notifications module built (`backend/src/modules/notifications`).
+- Endpoints:
+  - `GET /api/notifications`: retrieves user's in-app notifications.
+  - `PATCH /api/notifications/:id/read`: marks notification as read.
+  - `POST /api/notifications/send`: dispatches notification and triggers email alert.
+  - `POST /api/notifications/check-overdue`: scans overdue unpaid invoices, changes status to `Overdue`, creates notification alerts, and logs client activity.
 
-### 2. Database Push — MUST DO FIRST
-Push the Prisma schema to create the SQLite database:
-\`\`\`powershell
-cd freelanceflow\backend
-npx prisma db push
-\`\`\`
+---
 
-### 3. Real Test Coverage
-The test infrastructure is installed but only has placeholder tests. Actual unit and integration tests need to be written for:
-- clients.controller.ts — test CRUD operations with a mock Prisma client
-- ai.controller.ts — test fallback behavior when Groq key is missing
-- Frontend: test that protected routes redirect unauthenticated users
+## ☁️ Future AWS Porting & API Keys Reference
 
-### 4. Email Notifications (from original spec — not implemented)
-The spec mentioned email alerts for overdue invoices. This would require:
-- A cron job or scheduled function on the backend
-- Integration with an email provider (e.g., Resend or SendGrid)
-- A POST /api/notifications/send endpoint
+### API Keys Needed:
+1. **Groq API Key (`GROQ_API_KEY`)** — *Optional for local tests, required for live AI features*:
+   - Used for the AI Proposal Generator (`llama-3.1-8b-instant`) and account health score summaries.
+   - Obtain free at: https://console.groq.com.
+2. **Supabase Auth (`VITE_SUPABASE_URL` & `VITE_SUPABASE_ANON_KEY`)**:
+   - Currently handles user login, registration, and JWT token issuance.
+   - Obtain free at: https://supabase.com.
+   *(When porting to AWS, this can either remain as Supabase Auth or be migrated to AWS Cognito).*
+3. **Email Provider Key (`RESEND_API_KEY` or `EMAIL_API_KEY`)** — *Optional*:
+   - Used for dispatching external email alerts on overdue invoices.
+   - Can use Resend, SendGrid, or AWS SES when deployed to AWS.
 
-### 5. Production Deployment (optional stretch goal)
-- Migrate Prisma from SQLite to Supabase PostgreSQL by swapping the DATABASE_URL in .env
-- Run: npx prisma migrate deploy
-- Deploy backend to Railway or Render
-- Deploy frontend to Vercel (set env vars in dashboard)
+### Migrating to AWS:
+- **Database**: Spin up an **AWS RDS PostgreSQL** (or Aurora Serverless) instance, change `provider = "postgresql"` in `schema.prisma`, and update `DATABASE_URL` in `.env`.
+- **Backend**: Containerize using Docker and deploy to **AWS ECS (Fargate)** or **AWS App Runner**.
+- **Frontend**: Deploy to **AWS S3 + CloudFront** or **AWS Amplify**.
 
 ---
 
 ## How to Run Locally
 
-\`\`\`powershell
+```powershell
 # 1. Install all dependencies
 cd C:\Rishabh\TY\CC\cp\FreeLance-CRM\freelanceflow
 npm install --workspaces

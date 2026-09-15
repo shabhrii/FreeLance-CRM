@@ -3,14 +3,18 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getClientHealth = exports.generateProposal = void 0;
+exports.getClientHealth = exports.generateProposal = exports.getGroqClient = void 0;
 const prisma_1 = __importDefault(require("../../lib/prisma"));
 const groq_sdk_1 = __importDefault(require("groq-sdk"));
-const groq = process.env.GROQ_API_KEY ? new groq_sdk_1.default({ apiKey: process.env.GROQ_API_KEY }) : null;
+const getGroqClient = () => {
+    return process.env.GROQ_API_KEY ? new groq_sdk_1.default({ apiKey: process.env.GROQ_API_KEY }) : null;
+};
+exports.getGroqClient = getGroqClient;
 const generateProposal = async (req, res) => {
     try {
         const userId = req.user?.id;
         const { clientId, projectScope, budget, timeline } = req.body;
+        const groq = (0, exports.getGroqClient)();
         if (!groq) {
             res.status(503).json({ error: 'AI service unavailable: Missing GROQ_API_KEY' });
             return;
@@ -29,9 +33,10 @@ Estimated Budget: $${budget}
 Timeline: ${timeline}
 
 Keep it concise, professional, and structured with an introduction, scope, timeline, and pricing section.`;
+        const model = process.env.GROQ_MODEL || 'openai/gpt-oss-20b';
         const chatCompletion = await groq.chat.completions.create({
             messages: [{ role: 'user', content: prompt }],
-            model: 'llama-3.1-8b-instant',
+            model,
         });
         const proposal = chatCompletion.choices[0]?.message?.content || '';
         res.json({ proposal });
@@ -46,6 +51,7 @@ const getClientHealth = async (req, res) => {
     try {
         const userId = req.user?.id;
         const clientId = req.params.clientId;
+        const groq = (0, exports.getGroqClient)();
         if (!groq) {
             res.status(503).json({ error: 'AI service unavailable: Missing GROQ_API_KEY' });
             return;
@@ -99,9 +105,10 @@ Current pipeline status: ${client.status}
 Calculated health score: ${healthScore}/100
 
 Example format: "At risk — no contact in 18 days, one overdue invoice." or "Healthy — active projects and no overdue invoices."`;
+        const model = process.env.GROQ_MODEL || 'openai/gpt-oss-20b';
         const chatCompletion = await groq.chat.completions.create({
             messages: [{ role: 'user', content: prompt }],
-            model: 'llama-3.1-8b-instant',
+            model,
         });
         const summary = chatCompletion.choices[0]?.message?.content || 'Health summary unavailable.';
         // Cache the health score
