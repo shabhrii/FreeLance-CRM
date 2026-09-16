@@ -45,6 +45,12 @@ jest.mock('../../lib/prisma', () => ({
             findFirst: jest.fn(),
             update: jest.fn(),
         },
+        activityLog: {
+            create: jest.fn(),
+        },
+        notification: {
+            create: jest.fn(),
+        },
     },
 }));
 describe('AI Controller', () => {
@@ -156,6 +162,110 @@ describe('AI Controller', () => {
                 healthScore: 85,
                 summary: 'At risk — 1 overdue invoice.',
             });
+        });
+    });
+    describe('sendProposal (Resend Email Dispatch)', () => {
+        const originalEnv = process.env;
+        const originalFetch = global.fetch;
+        beforeEach(() => {
+            process.env = { ...originalEnv, RESEND_API_KEY: 'test-resend-key' };
+        });
+        afterEach(() => {
+            process.env = originalEnv;
+            global.fetch = originalFetch;
+        });
+        it('should return 400 if any required field is missing', async () => {
+            mockReq.body = { clientId: 'client-1', recipientEmail: 'test@example.com' }; // missing subject & proposalContent
+            await aiController.sendProposal(mockReq, mockRes);
+            expect(statusMock).toHaveBeenCalledWith(400);
+            expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining('Missing required fields') }));
+        });
+        it('should return 404 if client not found for user', async () => {
+            mockReq.body = {
+                clientId: 'client-999',
+                recipientEmail: 'client@example.com',
+                subject: 'Proposal',
+                proposalContent: 'Hello',
+            };
+            prisma_1.default.client.findFirst.mockResolvedValue(null);
+            await aiController.sendProposal(mockReq, mockRes);
+            expect(statusMock).toHaveBeenCalledWith(404);
+            expect(jsonMock).toHaveBeenCalledWith({ error: 'Client not found' });
+        });
+        it('should return 503 if RESEND_API_KEY is not configured', async () => {
+            delete process.env.RESEND_API_KEY;
+            mockReq.body = {
+                clientId: 'client-1',
+                recipientEmail: 'client@example.com',
+                subject: 'Proposal',
+                proposalContent: 'Hello',
+            };
+            prisma_1.default.client.findFirst.mockResolvedValue({ id: 'client-1', name: 'Acme Corp' });
+            await aiController.sendProposal(mockReq, mockRes);
+            expect(statusMock).toHaveBeenCalledWith(503);
+            expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining('Missing RESEND_API_KEY') }));
+        });
+        it('should return error if Resend API rejects the request', async () => {
+            mockReq.body = {
+                clientId: 'client-1',
+                recipientEmail: 'unverified@example.com',
+                subject: 'Proposal',
+                proposalContent: 'Drafted proposal content',
+            };
+            prisma_1.default.client.findFirst.mockResolvedValue({ id: 'client-1', name: 'Acme Corp' });
+            global.fetch = jest.fn().mockResolvedValue({
+                ok: false,
+                status: 403,
+                json: jest.fn().mockResolvedValue({ message: 'Domain verification required' }),
+            });
+            await aiController.sendProposal(mockReq, mockRes);
+            expect(statusMock).toHaveBeenCalledWith(403);
+            expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({ error: 'Domain verification required' }));
+        });
+        it('should send email, update client status, log activity, and return success', async () => {
+            mockReq.body = {
+                clientId: 'client-1',
+                recipientEmail: 'client@example.com',
+                subject: 'Website Redesign Proposal',
+                proposalContent: 'Complete proposal details...',
+            };
+            prisma_1.default.client.findFirst.mockResolvedValue({ id: 'client-1', name: 'Acme Corp' });
+            prisma_1.default.client.update.mockResolvedValue({ id: 'client-1', name: 'Acme Corp', status: 'Proposal Sent' });
+            prisma_1.default.activityLog.create.mockResolvedValue({});
+            prisma_1.default.notification.create.mockResolvedValue({});
+            global.fetch = jest.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                json: jest.fn().mockResolvedValue({ id: 'resend-email-123' }),
+            });
+            await aiController.sendProposal(mockReq, mockRes);
+            expect(global.fetch).toHaveBeenCalledWith('https://api.resend.com/emails', expect.objectContaining({
+                method: 'POST',
+                headers: expect.objectContaining({
+                    'Authorization': 'Bearer test-resend-key',
+                }),
+                body: expect.stringContaining('client@example.com'),
+            }));
+            expect(prisma_1.default.client.update).toHaveBeenCalledWith({
+                where: { id: 'client-1' },
+                data: { status: 'Proposal Sent' },
+            });
+            expect(prisma_1.default.activityLog.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    clientId: 'client-1',
+                    action: 'Proposal Sent',
+                }),
+            });
+            expect(prisma_1.default.notification.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    userId: 'user-1',
+                    title: expect.stringContaining('Acme Corp'),
+                }),
+            });
+            expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({
+                success: true,
+                emailId: 'resend-email-123',
+            }));
         });
     });
 });
